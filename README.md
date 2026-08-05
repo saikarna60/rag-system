@@ -19,7 +19,7 @@ fully **without an API key** (extractive answers); plug in an LLM for synthesize
 Ask a question and watch the retriever pull relevant passages, rerank them, and
 return a grounded answer with cited sources.
 
-![RAG demo](demo.png)
+![RAG demo](demo.png.png)
 
 ## Why this design
 
