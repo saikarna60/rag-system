@@ -1,0 +1,12 @@
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+# Optional — enables LLM-generated answers and framework variants
+openai>=1.0.0
+langchain>=0.1.0
+langgraph>=0.0.30
+faiss-cpu>=1.7.4
+chromadb>=0.4.0
+rank-bm25>=0.2.2

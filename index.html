@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Document Q&A — Live Demo</title>
+<style>
+  :root {
+    --bg: #14110f;
+    --surface: #1e1a16;
+    --surface-2: #262019;
+    --line: #37302a;
+    --ink: #f5efe6;
+    --muted: #a89a89;
+    --accent: #e8843c;      /* warm amber */
+    --accent-2: #4db6a0;    /* teal */
+    --user: #2d2620;
+    --mono: 'SFMono-Regular', ui-monospace, 'Cascadia Code', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  ::selection { background: var(--accent); color: #14110f; }
+  body {
+    font-family: var(--sans); color: var(--ink); background: var(--bg);
+    min-height: 100vh; padding: 34px 22px 60px; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  header { margin-bottom: 26px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+  h1 { font-size: 33px; font-weight: 700; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin-top: 10px; font-size: 15px; max-width: 600px; line-height: 1.55; }
+  .badges { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 15px; }
+  .badge { font-family: var(--mono); font-size: 11px; padding: 5px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; margin-top: 26px; }
+  @media (max-width: 780px) { .layout { grid-template-columns: 1fr; } }
+
+  /* Chat */
+  .chat {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+    display: flex; flex-direction: column; overflow: hidden; min-height: 460px;
+  }
+  .chat-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .chat-head .kb { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; }
+  .chat-head .kb b { color: var(--accent-2); }
+  .messages { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; max-height: 420px; }
+  .msg { display: flex; gap: 12px; max-width: 92%; }
+  .msg .av { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-family: var(--mono); font-weight: 700; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg.user .av { background: var(--user); color: var(--muted); }
+  .msg.bot .av { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #14110f; }
+  .msg .bubble { padding: 12px 15px; border-radius: 12px; font-size: 14.5px; line-height: 1.55; }
+  .msg.user .bubble { background: var(--user); border-top-right-radius: 3px; }
+  .msg.bot .bubble { background: var(--surface-2); border-top-left-radius: 3px; }
+  .msg.bot .bubble .cite { margin-top: 10px; font-family: var(--mono); font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px; }
+  .msg.bot .bubble .cite b { color: var(--accent); }
+  .typing { display: inline-flex; gap: 4px; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: 0.2s; } .typing i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+  .composer { padding: 14px; border-top: 1px solid var(--line); display: flex; gap: 10px; }
+  .composer input {
+    flex: 1; padding: 12px 15px; background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 10px; color: var(--ink); font-size: 14px; font-family: var(--sans); outline: none;
+  }
+  .composer input:focus { border-color: var(--accent); }
+  .composer button {
+    padding: 12px 20px; background: var(--accent); border: none; border-radius: 10px; color: #14110f;
+    font-weight: 700; font-size: 14px; cursor: pointer; transition: transform 0.12s;
+  }
+  .composer button:hover { transform: translateY(-1px); }
+
+  /* Side panel */
+  .side { display: flex; flex-direction: column; gap: 18px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .panel h2 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .suggest { display: flex; flex-direction: column; gap: 8px; }
+  .suggest button {
+    text-align: left; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 9px; color: var(--ink); font-size: 13px; cursor: pointer; transition: all 0.14s;
+  }
+  .suggest button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .pipeline-viz { display: flex; flex-direction: column; gap: 2px; }
+  .pstep { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .pstep .pi { width: 22px; height: 22px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; transition: all 0.3s; }
+  .pstep.active .pi { background: var(--accent); color: #14110f; border-color: var(--accent); }
+  .pstep.active { color: var(--ink); }
+
+  footer { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 20px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  footer .st { color: var(--accent-2); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow"><span class="dot"></span> RAG System · Live Demo</div>
+      <h1>Document <span>Q&amp;A</span> Assistant</h1>
+      <p class="sub">Ask a question and the retriever pulls relevant passages via hybrid search (dense + BM25), reranks them, and returns a grounded answer with cited sources.</p>
+      <div class="badges">
+        <span class="badge">LangChain</span>
+        <span class="badge">LangGraph</span>
+        <span class="badge">Embeddings</span>
+        <span class="badge">FAISS</span>
+        <span class="badge">Hybrid Search</span>
+        <span class="badge">Reranking</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="chat">
+        <div class="chat-head"><span class="kb">📚 Knowledge base: <b>ml_basics.txt</b>, <b>vector_search.txt</b></span></div>
+        <div class="messages" id="messages">
+          <div class="msg bot"><div class="av">AI</div><div class="bubble">Ask me anything about RAG, embeddings, or vector search. Try a suggested question on the right.</div></div>
+        </div>
+        <div class="composer">
+          <input id="qInput" type="text" placeholder="Ask a question…" autocomplete="off">
+          <button id="askBtn">Ask</button>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="panel">
+          <h2>Suggested Questions</h2>
+          <div class="suggest" id="suggest"></div>
+        </div>
+        <div class="panel">
+          <h2>Retrieval Pipeline</h2>
+          <div class="pipeline-viz" id="pipeviz">
+            <div class="pstep" data-s="0"><span class="pi">1</span> Embed query</div>
+            <div class="pstep" data-s="1"><span class="pi">2</span> Hybrid search</div>
+            <div class="pstep" data-s="2"><span class="pi">3</span> Rerank</div>
+            <div class="pstep" data-s="3"><span class="pi">4</span> Generate</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <span>Client-side demo · Full code on GitHub</span>
+      <span class="st">LangChain · FAISS · Hybrid Retrieval · FastAPI</span>
+    </footer>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  // Knowledge base (mirrors the sample docs in the repo)
+  const KB = {
+    "ml_basics.txt": "Retrieval-augmented generation (RAG) combines a retriever and a generator. The retriever finds relevant passages using semantic search over vector embeddings, and the generator (a large language model) produces an answer grounded in those passages. RAG reduces hallucination because the model is conditioned on retrieved evidence. Hybrid retrieval blends lexical search (BM25) with dense vector search. Rerankers, often cross-encoders, reorder candidate passages by relevance before the language model.",
+    "vector_search.txt": "Vector databases such as FAISS, Chroma, Pinecone, and Qdrant store dense embeddings and support approximate nearest-neighbor search. Embeddings are produced by models like sentence-transformers, which map text into a high-dimensional space where similar texts are close together. Chunking splits long documents into smaller overlapping windows. Metadata filtering narrows the search to a subset of documents.",
+  };
+
+  const QA = [
+    { q: "What is hybrid retrieval?", src: "ml_basics.txt",
+      a: "Hybrid retrieval blends lexical search (BM25) with dense vector search — combining exact keyword matching with semantic similarity so both meaning and specific terms are captured." },
+    { q: "Which vector databases are mentioned?", src: "vector_search.txt",
+      a: "The knowledge base mentions FAISS, Chroma, Pinecone, and Qdrant — all vector databases that store dense embeddings and support approximate nearest-neighbor search." },
+    { q: "How does RAG reduce hallucination?", src: "ml_basics.txt",
+      a: "RAG reduces hallucination because the language model is conditioned on retrieved evidence rather than relying only on its own parameters — answers are grounded in real passages." },
+    { q: "What is reranking?", src: "ml_basics.txt",
+      a: "Rerankers, often cross-encoders, reorder candidate passages by relevance before they are sent to the language model — cutting noise in the context window." },
+    { q: "Why do we chunk documents?", src: "vector_search.txt",
+      a: "Chunking splits long documents into smaller overlapping windows so retrieval returns focused, relevant context instead of an entire document." },
+  ];
+
+  // Suggested questions
+  const sg = $('suggest');
+  QA.slice(0, 4).forEach(item => {
+    const b = document.createElement('button');
+    b.textContent = item.q;
+    b.onclick = () => askQuestion(item.q);
+    sg.appendChild(b);
+  });
+
+  function addMsg(role, html) {
+    const m = document.createElement('div');
+    m.className = 'msg ' + role;
+    m.innerHTML = `<div class="av">${role === 'bot' ? 'AI' : 'You'}</div><div class="bubble">${html}</div>`;
+    $('messages').appendChild(m);
+    $('messages').scrollTop = $('messages').scrollHeight;
+    return m;
+  }
+
+  async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function animatePipeline() {
+    const steps = document.querySelectorAll('.pstep');
+    steps.forEach(s => s.classList.remove('active'));
+    for (let i = 0; i < steps.length; i++) {
+      steps[i].classList.add('active');
+      await sleep(320);
+    }
+  }
+
+  function findAnswer(q) {
+    const ql = q.toLowerCase();
+    // best match by keyword overlap against known Q/A, else fallback retrieval
+    let best = null, bestScore = 0;
+    QA.forEach(item => {
+      const overlap = item.q.toLowerCase().split(/\W+/).filter(w => w.length > 3 && ql.includes(w)).length;
+      if (overlap > bestScore) { bestScore = overlap; best = item; }
+    });
+    if (best && bestScore > 0) return best;
+    // fallback: keyword search across KB
+    for (const [src, txt] of Object.entries(KB)) {
+      const words = ql.split(/\W+/).filter(w => w.length > 3);
+      if (words.some(w => txt.toLowerCase().includes(w))) {
+        const sentence = txt.split(". ").find(s => words.some(w => s.toLowerCase().includes(w)));
+        return { a: sentence ? sentence + "." : txt.slice(0, 180) + "…", src };
+      }
+    }
+    return null;
+  }
+
+  let busy = false;
+  async function askQuestion(q) {
+    if (busy || !q.trim()) return;
+    busy = true;
+    addMsg('user', q.replace(/</g, '&lt;'));
+    $('qInput').value = '';
+
+    // typing indicator + pipeline animation
+    const typing = addMsg('bot', '<span class="typing"><i></i><i></i><i></i></span>');
+    await animatePipeline();
+    typing.remove();
+
+    const res = findAnswer(q);
+    if (res) {
+      addMsg('bot', `${res.a}<div class="cite">Source: <b>${res.src}</b> · retrieved via hybrid search + rerank</div>`);
+    } else {
+      addMsg('bot', `I couldn't find that in the knowledge base. Try asking about RAG, embeddings, reranking, or vector databases.`);
+    }
+    document.querySelectorAll('.pstep').forEach(s => s.classList.remove('active'));
+    busy = false;
+  }
+
+  $('askBtn').onclick = () => askQuestion($('qInput').value);
+  $('qInput').addEventListener('keydown', e => { if (e.key === 'Enter') askQuestion($('qInput').value); });
+</script>
+</body>
+</html>
